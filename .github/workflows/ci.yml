@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.415
+      - name: Install OCR deps
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr ghostscript poppler-utils
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Smoke test (integration)
+        run: |
+          set -e
+          echo "Creating sample PS file"
+          mkdir -p ./ci-sample
+          cat > ./ci-sample/sample.ps <<'PS'
+          %!PS-Adobe-3.0
+          /Times-Roman findfont 24 scalefont setfont
+          72 720 moveto
+          (CA-G.R. SP No. 06110-MIN) show
+          showpage
+          PS
+          echo "Converting PS to PDF"
+          ps2pdf ./ci-sample/sample.ps ./ci-sample/sample.pdf
+          echo "Directory listing:" && ls -la ./ci-sample
+          echo "Running renamer against sample directory"
+          dotnet run --project src/RenameDocument -- -d ./ci-sample
+          echo "Check result"
+          if [ -f "./ci-sample/SP No. 06110-MIN.pdf" ]; then echo "Smoke test passed"; else echo "Smoke test failed: expected file missing"; exit 1; fi
+      - name: Format check
+        run: dotnet tool restore || true
+
+  smoke-windows:
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.415
+      - name: Install OCR deps (choco)
+        run: choco install ghostscript tesseract poppler --yes
+      - name: Create sample PS file
+        shell: powershell
+        run: |
+          New-Item -Path ./ci-sample -ItemType Directory -Force | Out-Null
+          @'
+          %!PS-Adobe-3.0
+          /Times-Roman findfont 24 scalefont setfont
+          72 720 moveto
+          (CA-G.R. SP No. 06110-MIN) show
+          showpage
+          '@ | Out-File -FilePath .\ci-sample\sample.ps -Encoding ascii
+      - name: Convert PS to PDF (Ghostscript)
+        shell: powershell
+        run: |
+          gswin64c -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=.\ci-sample\sample.pdf .\ci-sample\sample.ps
+      - name: Run renamer
+        run: dotnet run --project src/RenameDocument -- -d ./ci-sample
+      - name: Verify
+        shell: powershell
+        run: |
+          if (-not (Test-Path .\ci-sample\"SP No. 06110-MIN.pdf")) { Write-Error "Smoke test failed: expected file missing"; exit 1 } else { Write-Host "Smoke test passed" }
+      - name: Format check
+        run: dotnet tool restore || true
