@@ -19,11 +19,28 @@ Goal: Look for `CA-G.R. SP No. <number-and-suffix>` and rename the file to `SP N
 
 ## Usage
 
-dotnet run --project src/RenameDocument -- -d "C:\path\to\pdfs" [-n] [-c increment|skip]
+dotnet run --project src/RenameDocument -- -d "C:\path\to\pdfs" [-n] [-c increment|skip] [-o]
 
 - `-d`, `--directory`: required. Process all PDF files in this directory.
 - `-n`, `--dry-run`: do not rename, only simulate.
 - `-c`, `--conflict`: `increment` (default) or `skip`.
+- `-o`, `--force-ocr`: force OCR for every file (skip embedded text extraction)
+
+## Local smoke test scripts
+
+There are convenience scripts to run a local smoke test which:
+- create a small PostScript sample file containing the identifier
+- convert it to PDF using Ghostscript (`gs` / `gswin64c`) or `ps2pdf`
+- run the renamer against the folder
+
+- Windows PowerShell:
+  - `powershell -ExecutionPolicy RemoteSigned -File scripts/run-local-smoke.ps1`
+  - Add `-ForceOcr` to the script arguments to force OCR: `.\
+un-local-smoke.ps1 -ForceOcr`
+
+- macOS / Linux:
+  - `bash scripts/run-local-smoke.sh`
+  - Add `--force-ocr` to force OCR: `bash scripts/run-local-smoke.sh --force-ocr`
 
 ## Notes
 - Place Tesseract `tessdata` folder in the working directory or system tessdata path for OCR to work.

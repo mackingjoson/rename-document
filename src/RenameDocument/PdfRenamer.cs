@@ -23,11 +23,21 @@ public class PdfRenamer
             Log.Information("Processing {File}", Path.GetFileName(file));
             try
             {
-                var text = ExtractTextFromPdf(file);
-                if (string.IsNullOrWhiteSpace(text))
+                string text;
+
+                if (_options.ForceOcr)
                 {
-                    Log.Debug("No text found, using OCR for {File}", Path.GetFileName(file));
+                    Log.Debug("Force OCR enabled, running OCR for {File}", Path.GetFileName(file));
                     text = OcrPdf(file);
+                }
+                else
+                {
+                    text = ExtractTextFromPdf(file);
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        Log.Debug("No text found, using OCR for {File}", Path.GetFileName(file));
+                        text = OcrPdf(file);
+                    }
                 }
 
                 var match = FindCaseIdentifier(text);
@@ -162,12 +172,29 @@ public class PdfRenamer
 
             var images = Directory.GetFiles(tempDir, "page-*.png").OrderBy(x => x).ToArray();
 
-            using var engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default);
-            foreach (var img in images)
+            // Try to use local ./tessdata if present, otherwise let Tesseract use system tessdata paths
+            TesseractEngine engine = null;
+            try
             {
-                using var pix = Pix.LoadFromFile(img);
-                using var page = engine.Process(pix);
-                sb.AppendLine(page.GetText());
+                if (Directory.Exists("./tessdata"))
+                {
+                    engine = new TesseractEngine("./tessdata", "eng", EngineMode.Default);
+                }
+                else
+                {
+                    engine = new TesseractEngine(string.Empty, "eng", EngineMode.Default);
+                }
+
+                foreach (var img in images)
+                {
+                    using var pix = Pix.LoadFromFile(img);
+                    using var page = engine.Process(pix);
+                    sb.AppendLine(page.GetText());
+                }
+            }
+            finally
+            {
+                engine?.Dispose();
             }
         }
         finally

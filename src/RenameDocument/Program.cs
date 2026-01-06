@@ -45,4 +45,7 @@ class Options
 
     [Option('c', "conflict", Required = false, HelpText = "Conflict policy: skip or increment", Default = "increment")]
     public string ConflictPolicy { get; set; } = "increment";
+
+    [Option('o', "force-ocr", Required = false, HelpText = "Force OCR on all files (do not use embedded text)")]
+    public bool ForceOcr { get; set; } = false;
 }
